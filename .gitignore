@@ -30,3 +30,10 @@ uploads/
 evidence/
 *.db
 *.sqlite
+
+# FAISS index files
+backend/agents/precedent_index/
+**/precedent_index/
+*.index
+precedent.index
+meta.json

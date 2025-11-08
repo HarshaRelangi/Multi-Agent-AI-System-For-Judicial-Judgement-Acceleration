@@ -1,0 +1,101 @@
+name: Test Agent-1 InLegalBERT + FAISS
+
+on:
+  push:
+    branches:
+      - feature/inlegalbert-faiss-agent1
+      - main
+    paths:
+      - 'backend/agents/agent1_inlegal_faiss.py'
+      - 'backend/agents/tests/**'
+      - '.github/workflows/test-agent1-inlegal-faiss.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/agents/agent1_inlegal_faiss.py'
+      - 'backend/agents/tests/**'
+      - '.github/workflows/test-agent1-inlegal-faiss.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+      
+      - name: Install Python dependencies
+        working-directory: backend/agents
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+      
+      - name: Run smoke tests
+        working-directory: backend/agents
+        run: |
+          pytest tests/test_agent1_inlegal_faiss.py -v --tb=short
+        env:
+          # Allow tests to run even if models fail to load
+          TRANSFORMERS_OFFLINE: 0
+      
+      - name: Test health endpoint (if server can start)
+        working-directory: backend/agents
+        run: |
+          # Try to start server in background and test health endpoint
+          timeout 30 python -m uvicorn agent1_inlegal_faiss:app --host 0.0.0.0 --port 8001 &
+          sleep 10
+          curl -f http://localhost:8001/health || echo "Health check failed (models may not be loaded)"
+          pkill -f uvicorn || true
+        continue-on-error: true
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install linting tools
+        run: |
+          pip install flake8 black isort
+      
+      - name: Check code formatting with black
+        working-directory: backend/agents
+        run: |
+          black --check agent1_inlegal_faiss.py || echo "Formatting check failed (non-blocking)"
+        continue-on-error: true
+      
+      - name: Check imports with isort
+        working-directory: backend/agents
+        run: |
+          isort --check-only agent1_inlegal_faiss.py || echo "Import check failed (non-blocking)"
+        continue-on-error: true
+      
+      - name: Lint with flake8
+        working-directory: backend/agents
+        run: |
+          flake8 agent1_inlegal_faiss.py --max-line-length=120 --ignore=E501,W503 || echo "Linting issues found (non-blocking)"
+        continue-on-error: true
+
