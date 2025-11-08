@@ -36,8 +36,8 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "precedent_index")
 # Ensure directory exists
 os.makedirs(DB_PATH, exist_ok=True)
 
-# Initialize models on startup
-initialize_models()
+# Models will be initialized lazily when first needed
+# This avoids blocking on import (important for tests)
 
 
 def save_index(index, meta, index_file, meta_file):
@@ -55,7 +55,15 @@ def save_index(index, meta, index_file, meta_file):
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    from inlegalbert_helper import tokenizer, ner_model, embed_model, device
+    # Try to initialize models if not already done
+    from inlegalbert_helper import initialize_models, tokenizer, ner_model, embed_model, device
+    if tokenizer is None:
+        # Models not initialized yet - try to initialize (non-blocking for health check)
+        try:
+            initialize_models()
+        except Exception:
+            pass  # Models may be downloading or unavailable
+    
     return {
         "status": "healthy",
         "model_loaded": embed_model is not None,

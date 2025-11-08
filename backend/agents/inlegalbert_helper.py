@@ -218,10 +218,18 @@ def analyze_with_inlegalbert(text: str, top_k_precedents: int = 5) -> Dict:
     if not TRANSFORMERS_AVAILABLE:
         return result
     
-    # Initialize models if not already done
+    # Initialize models if not already done (lazy initialization)
     if tokenizer is None:
-        if not initialize_models():
+        try:
+            if not initialize_models():
+                return result
+        except Exception as e:
+            print(f"Warning: Failed to initialize InLegalBERT models: {e}")
             return result
+    
+    # Check if models are actually loaded
+    if embed_model is None:
+        return result
     
     result["inlegalbert_available"] = True
     
