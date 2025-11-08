@@ -1,0 +1,22 @@
+{
+  "name": "justice-ai-system",
+  "version": "1.0.0",
+  "description": "Multi-Agent AI System for Justice Acceleration",
+  "scripts": {
+    "start:agents": "concurrently \"python backend/agents/agent1.py\" \"python backend/agents/agent2.py\" \"python backend/agents/agent3.py\"",
+    "start:api": "cd backend/api && npm start",
+    "start:frontend": "cd frontend && npm run dev",
+    "start:all": "concurrently \"npm run start:agents\" \"npm run start:api\" \"npm run start:frontend\"",
+    "install:all": "cd backend/api && npm install && cd ../../frontend && npm install",
+    "setup": "npm run install:all && pip install -r backend/agents/requirements.txt"
+  },
+  "keywords": ["ai", "legal", "multi-agent", "justice"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+
+
+

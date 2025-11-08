@@ -1,0 +1,367 @@
+.verdict-viewer {
+  animation: fadeIn 0.8s ease-out;
+}
+
+.verdict-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  margin-bottom: 24px;
+}
+
+.verdict-header h1 {
+  color: white;
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.verdict-main {
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.prediction-section {
+  text-align: center;
+}
+
+.prediction-section h2 {
+  color: white;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.prediction-badge {
+  display: inline-block;
+  padding: 16px 48px;
+  border-radius: 16px;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 32px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.prediction-badge.likely_liable,
+.prediction-badge.plaintiff {
+  background: linear-gradient(135deg, #22c55e, #10b981);
+  color: white;
+}
+
+.prediction-badge.likely_not_liable,
+.prediction-badge.defendant {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.prediction-badge.moderately_liable,
+.prediction-badge.mixed {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+
+.confidence-meter {
+  margin-top: 32px;
+}
+
+.confidence-label {
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.confidence-bar {
+  width: 100%;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.confidence-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  border-radius: 16px;
+  transition: width 1s ease-out;
+}
+
+.confidence-value {
+  color: #60a5fa;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.recommendation-section {
+  margin-top: 32px;
+  padding: 20px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.recommendation-section h3 {
+  color: #60a5fa;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.recommendation-section p {
+  color: white;
+  font-size: 16px;
+  margin: 0;
+}
+
+.glass-card {
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.glass-card h2 {
+  color: white;
+  font-size: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(96, 165, 250, 0.3);
+}
+
+.reasoning-section {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.reasoning-text p {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.8;
+  margin-bottom: 12px;
+}
+
+.reasoning-text .section-header {
+  color: #60a5fa;
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+.precedents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.precedent-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.precedent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.precedent-header h3 {
+  color: white;
+  font-size: 18px;
+  margin: 0;
+}
+
+.similarity-score {
+  padding: 6px 16px;
+  background: rgba(96, 165, 250, 0.2);
+  color: #60a5fa;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.precedent-meta {
+  display: flex;
+  gap: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.precedent-outcome {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.precedent-outcome.positive {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.precedent-outcome.negative {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.precedent-outcome.neutral {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.precedent-reasoning {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin: 0;
+  font-size: 14px;
+}
+
+.risk-assessment h2 {
+  color: white;
+}
+
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.risk-item {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.risk-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.risk-value.low {
+  color: #22c55e;
+}
+
+.risk-value.medium {
+  color: #fbbf24;
+}
+
+.risk-value.high {
+  color: #ef4444;
+}
+
+.strengths-weaknesses {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.sw-section h4 {
+  color: white;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.sw-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sw-section li {
+  padding: 10px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.alternatives-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.alternative-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.alternative-card h3 {
+  color: #60a5fa;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.alternative-probability {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.alternative-card p {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+.alternative-recommendation {
+  padding: 12px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 8px;
+  color: #60a5fa;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.completion-actions {
+  text-align: center;
+  padding: 32px;
+}
+
+.completion-actions p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  margin-bottom: 24px;
+}
+
+.btn-secondary {
+  padding: 14px 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .risk-grid,
+  .strengths-weaknesses,
+  .alternatives-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+

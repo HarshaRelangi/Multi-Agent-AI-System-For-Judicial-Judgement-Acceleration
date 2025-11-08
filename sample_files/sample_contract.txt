@@ -1,0 +1,64 @@
+=================================================================
+                    EMPLOYMENT AGREEMENT
+=================================================================
+
+This Employment Agreement ("Agreement") is entered into on 
+January 15, 2024, between ABC Corporation ("Employer") and 
+John Doe ("Employee").
+
+ARTICLE I - POSITION AND DUTIES
+Employee shall serve as Senior Software Developer, reporting 
+to Jane Smith, Director of Engineering.
+
+ARTICLE II - COMPENSATION
+Employee shall receive an annual salary of $95,000, payable 
+in bi-weekly installments.
+
+ARTICLE III - TERM OF EMPLOYMENT
+This Agreement shall commence on February 1, 2024 and shall 
+continue indefinitely, subject to termination as provided herein.
+
+ARTICLE IV - TERMINATION
+Either party may terminate this Agreement with 30 days written 
+notice. Termination may occur immediately in case of breach 
+of contract terms.
+
+ARTICLE V - CONFIDENTIALITY
+Employee agrees to maintain confidentiality of all proprietary 
+information and trade secrets of the Company.
+
+ARTICLE VI - NON-COMPETE
+Employee agrees not to compete with the Employer within 50 miles 
+for a period of 12 months following termination.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement 
+on the date first written above.
+
+ABC Corporation               John Doe
+___________________          ___________________
+Jane Smith, CEO              John Doe
+Date: January 15, 2024      Date: January 15, 2024
+
+=================================================================
+
+ADDENDUM - TERMINATION LETTER
+Date: March 10, 2024
+
+Dear John Doe,
+
+We regret to inform you that your employment is terminated 
+effective immediately due to breach of confidentiality agreement. 
+We discovered unauthorized disclosure of proprietary information 
+to competitors.
+
+You are required to return all company property immediately.
+
+Sincerely,
+Jane Smith
+Director of Human Resources
+ABC Corporation
+
+=================================================================
+
+
+
