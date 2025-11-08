@@ -39,7 +39,20 @@ const AGENT2_URL = process.env.AGENT2_URL || 'http://localhost:8002';
 const AGENT3_URL = process.env.AGENT3_URL || 'http://localhost:8003';
 
 // Encryption configuration for verdict security
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+// Generate a consistent 32-byte key (64 hex characters) for AES-256
+// In production, set ENCRYPTION_KEY environment variable with a secure 64-character hex string
+let ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  // Generate a random key if not provided (will be different each restart)
+  ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+  console.log('[Security] Generated new encryption key (not persistent across restarts)');
+} else {
+  // Ensure key is exactly 64 hex characters (32 bytes)
+  if (ENCRYPTION_KEY.length !== 64) {
+    console.warn('[Security] Encryption key length invalid, generating new one');
+    ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+  }
+}
 const IV_LENGTH = 16; // Initialization Vector length for AES encryption
 
 // FTP Configuration for secure file storage (optional)
@@ -85,18 +98,29 @@ const caseDataStore = new Map(); // Store case metadata for deletion tracking
  */
 function encryptVerdict(text) {
   try {
+    // Ensure we have a valid 32-byte key (64 hex characters)
+    const keyBuffer = Buffer.from(ENCRYPTION_KEY.slice(0, 64), 'hex');
+    
+    if (keyBuffer.length !== 32) {
+      throw new Error('Invalid encryption key length. Must be 32 bytes (64 hex characters)');
+    }
+    
+    // Generate random IV for each encryption
     const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(
-      'aes-256-cbc',
-      Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'hex'),
-      iv
-    );
-    let encrypted = cipher.update(text, 'utf8');
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
+    
+    // Create cipher with AES-256-CBC
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
+    
+    // Encrypt the text
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    // Return IV and encrypted data separated by colon
+    return iv.toString('hex') + ':' + encrypted;
   } catch (error) {
-    console.error('Encryption error:', error);
-    throw new Error('Failed to encrypt verdict data');
+    console.error('[Encryption] Error:', error.message);
+    console.error('[Encryption] Stack:', error.stack);
+    throw new Error(`Failed to encrypt verdict data: ${error.message}`);
   }
 }
 
@@ -107,20 +131,34 @@ function encryptVerdict(text) {
  */
 function decryptVerdict(text) {
   try {
+    // Split IV and encrypted data
     const textParts = text.split(':');
+    if (textParts.length < 2) {
+      throw new Error('Invalid encrypted data format. Expected "IV:encryptedData"');
+    }
+    
     const iv = Buffer.from(textParts.shift(), 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv(
-      'aes-256-cbc',
-      Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'hex'),
-      iv
-    );
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString('utf8');
+    const encryptedText = textParts.join(':'); // Rejoin in case data contains colons
+    
+    // Ensure we have a valid 32-byte key
+    const keyBuffer = Buffer.from(ENCRYPTION_KEY.slice(0, 64), 'hex');
+    
+    if (keyBuffer.length !== 32) {
+      throw new Error('Invalid encryption key length. Must be 32 bytes (64 hex characters)');
+    }
+    
+    // Create decipher with AES-256-CBC
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
+    
+    // Decrypt the data
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
   } catch (error) {
-    console.error('Decryption error:', error);
-    throw new Error('Failed to decrypt verdict data');
+    console.error('[Decryption] Error:', error.message);
+    console.error('[Decryption] Stack:', error.stack);
+    throw new Error(`Failed to decrypt verdict data: ${error.message}`);
   }
 }
 
@@ -499,20 +537,37 @@ app.post('/api/agents/agent3/synthesize', async (req, res) => {
     const verdictData = await response.json();
     console.log('[Agent 3] Verdict synthesis completed');
     
-    // Encrypt sensitive verdict data for secure transmission
-    const encryptedVerdict = {
-      ...verdictData,
-      encrypted: true,
-      verdict_encrypted: encryptVerdict(JSON.stringify({
-        prediction: verdictData.prediction,
-        verdict_tendency: verdictData.verdict_tendency,
-        confidence: verdictData.confidence,
-        reasoning: verdictData.reasoning,
-        precedents: verdictData.precedents,
-        risk_assessment: verdictData.risk_assessment
-      })),
-      encryption_timestamp: new Date().toISOString()
+    // Prepare verdict data for encryption
+    const verdictToEncrypt = {
+      prediction: verdictData.prediction,
+      verdict_tendency: verdictData.verdict_tendency,
+      confidence: verdictData.confidence,
+      reasoning: verdictData.reasoning,
+      precedents: verdictData.precedents || [],
+      risk_assessment: verdictData.risk_assessment || {}
     };
+    
+    // Encrypt sensitive verdict data for secure transmission
+    let encryptedVerdict;
+    try {
+      const verdictJsonString = JSON.stringify(verdictToEncrypt);
+      const encryptedData = encryptVerdict(verdictJsonString);
+      
+      encryptedVerdict = {
+        ...verdictData,
+        encrypted: true,
+        verdict_encrypted: encryptedData,
+        encryption_timestamp: new Date().toISOString()
+      };
+    } catch (encryptError) {
+      console.error('[Agent 3] Encryption failed, sending unencrypted verdict:', encryptError.message);
+      // If encryption fails, send unencrypted (not recommended for production)
+      encryptedVerdict = {
+        ...verdictData,
+        encrypted: false,
+        encryption_error: encryptError.message
+      };
+    }
     
     // Store case data for potential deletion
     caseDataStore.set(requestBody.case_id, {
