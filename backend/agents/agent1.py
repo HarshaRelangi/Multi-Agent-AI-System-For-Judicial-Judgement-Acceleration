@@ -72,6 +72,19 @@ except ImportError:
     TESSERACT_AVAILABLE = False
     print("Warning: pytesseract not available (optional for OCR)")
 
+# Try to import InLegalBERT helper
+try:
+    from inlegalbert_helper import analyze_with_inlegalbert, initialize_models as init_inlegalbert
+    INLEGALBERT_AVAILABLE = True
+    # Initialize models on import
+    init_inlegalbert()
+except ImportError:
+    INLEGALBERT_AVAILABLE = False
+    print("Warning: InLegalBERT helper not available. Install transformers, torch, and faiss-cpu for precedent search.")
+except Exception as e:
+    INLEGALBERT_AVAILABLE = False
+    print(f"Warning: InLegalBERT initialization failed: {e}")
+
 class CaseAnalysisRequest(BaseModel):
     case_id: Optional[str] = None
 
@@ -82,7 +95,8 @@ async def health():
         "service": "agent1",
         "openai_enabled": bool(OPENAI_API_KEY) and OPENAI_AVAILABLE,
         "pdf_available": PDF_AVAILABLE,
-        "docx_available": DOCX_AVAILABLE
+        "docx_available": DOCX_AVAILABLE,
+        "inlegalbert_enabled": INLEGALBERT_AVAILABLE
     }
 
 async def extract_text_from_pdf(file_content: bytes) -> str:
@@ -524,6 +538,33 @@ async def process_file(file: UploadFile, case_id: str) -> dict:
         if "summary" not in analysis:
             print(f"WARNING: Analysis missing 'summary', adding fallback")
             analysis["summary"] = f"Document processed: {file_name}"
+        
+        # Run InLegalBERT analysis for NER and precedent retrieval
+        if INLEGALBERT_AVAILABLE and extracted_text:
+            try:
+                print(f"Running InLegalBERT analysis (NER + precedent search)...")
+                inlegalbert_result = analyze_with_inlegalbert(extracted_text, top_k_precedents=5)
+                if inlegalbert_result.get("inlegalbert_available"):
+                    result["inlegalbert_analysis"] = {
+                        "ner": inlegalbert_result.get("ner", []),
+                        "precedents": inlegalbert_result.get("precedents", []),
+                        "embedding_dim": inlegalbert_result.get("embedding_dim", 0),
+                        "precedents_found": len(inlegalbert_result.get("precedents", []))
+                    }
+                    print(f"✅ InLegalBERT: Found {len(inlegalbert_result.get('precedents', []))} precedents, {len(inlegalbert_result.get('ner', []))} NER tokens")
+                else:
+                    result["inlegalbert_analysis"] = {
+                        "error": "InLegalBERT models not available",
+                        "ner": [],
+                        "precedents": []
+                    }
+            except Exception as e:
+                print(f"⚠️ InLegalBERT analysis failed: {e}")
+                result["inlegalbert_analysis"] = {
+                    "error": str(e),
+                    "ner": [],
+                    "precedents": []
+                }
             
     elif not result.get("processed", False):
         print(f"WARNING: Insufficient text extracted ({len(extracted_text) if extracted_text else 0} chars)")
@@ -568,6 +609,9 @@ async def analyze_case(
     all_timeline = []
     all_legal_issues = []
     summaries = []
+    # InLegalBERT results aggregation
+    all_precedents = []
+    all_ner_tokens = []
     
     for file in files:
         try:
@@ -613,6 +657,17 @@ async def analyze_case(
                 if "summary" in analysis and isinstance(analysis["summary"], str) and analysis["summary"].strip():
                     summaries.append(analysis["summary"])
                     print(f"Added summary from {file_result['file_name']}")
+            
+            # Extract InLegalBERT results if available
+            if "inlegalbert_analysis" in file_result:
+                inlegalbert = file_result["inlegalbert_analysis"]
+                # Aggregate precedents
+                if "precedents" in inlegalbert and isinstance(inlegalbert["precedents"], list):
+                    all_precedents.extend(inlegalbert["precedents"])
+                    print(f"Added {len(inlegalbert['precedents'])} precedents from {file_result['file_name']}")
+                # Aggregate NER tokens
+                if "ner" in inlegalbert and isinstance(inlegalbert["ner"], list):
+                    all_ner_tokens.extend(inlegalbert["ner"])
             
             summaries.append(f"Processed {file_result['file_name']} ({file_result['type']})")
             
@@ -695,6 +750,26 @@ async def analyze_case(
         }]
         print("Warning: No legal issues extracted - using fallback")
     
+    # Deduplicate precedents by case_id
+    seen_precedents = {}
+    for prec in all_precedents:
+        case_id_prec = prec.get("case_id", "")
+        if case_id_prec and case_id_prec not in seen_precedents:
+            seen_precedents[case_id_prec] = prec
+        elif not case_id_prec:
+            # If no case_id, use text hash
+            text_hash = hash(prec.get("text", ""))
+            if text_hash not in seen_precedents:
+                seen_precedents[text_hash] = prec
+    
+    unique_precedents = list(seen_precedents.values())
+    # Sort by similarity score (higher is better)
+    unique_precedents.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
+    
+    # Update case summary to include InLegalBERT results
+    if unique_precedents:
+        case_summary += f"\n    Precedents Found: {len(unique_precedents)} similar legal precedents identified using InLegalBERT."
+    
     return {
         "case_id": case_id,
         "case_summary": case_summary.strip(),
@@ -706,6 +781,12 @@ async def analyze_case(
         "entities": all_entities,
         "timeline": sorted(all_timeline, key=lambda x: x.get("date", ""))[:20],  # Sort by date
         "legal_issues_identified": all_legal_issues[:10],  # Top 10 issues
+        "inlegalbert_results": {
+            "precedents": unique_precedents[:10],  # Top 10 precedents
+            "total_precedents": len(unique_precedents),
+            "ner_tokens_count": len(all_ner_tokens),
+            "enabled": INLEGALBERT_AVAILABLE
+        },
         "analysis_timestamp": datetime.now().isoformat()
     }
 

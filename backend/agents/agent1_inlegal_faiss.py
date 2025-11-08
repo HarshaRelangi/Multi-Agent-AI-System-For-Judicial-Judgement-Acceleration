@@ -2,17 +2,22 @@
 Agent 1: InLegalBERT + FAISS Case Analyzer
 Performs NER and text embeddings on case documents.
 Retrieves top-k similar precedents using FAISS similarity search.
+
+This is a standalone FastAPI service that uses the inlegalbert_helper module.
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoModel
-import torch
-import numpy as np
-import faiss
 import os
 import json
+import faiss
 from typing import List, Dict, Optional
+
+# Import helper functions
+from inlegalbert_helper import (
+    initialize_models, embed_text, perform_ner, search_precedents,
+    analyze_with_inlegalbert, load_or_create_faiss
+)
 
 app = FastAPI(title="Agent-1: InLegalBERT + FAISS Case Analyzer")
 
@@ -31,90 +36,8 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "precedent_index")
 # Ensure directory exists
 os.makedirs(DB_PATH, exist_ok=True)
 
-# Initialize models
-tokenizer = None
-ner_model = None
-embed_model = None
-device = None
-
-try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    try:
-        ner_model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
-    except Exception as e:
-        print(f"Warning: Could not load NER model: {e}. Continuing without NER.")
-        ner_model = None
-    
-    embed_model = AutoModel.from_pretrained(MODEL_ID)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    embed_model.to(device)
-    if ner_model:
-        ner_model.to(device)
-    print(f"✅ Models loaded successfully on {device}")
-except Exception as e:
-    print(f"❌ Error loading models: {e}")
-    print("Please ensure transformers and torch are installed: pip install transformers torch")
-
-
-def mean_pooling(token_embeds, attention_mask):
-    """Mean pooling for sentence embeddings."""
-    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeds.size()).float()
-    sum_embeddings = torch.sum(token_embeds * input_mask_expanded, 1)
-    sum_mask = input_mask_expanded.sum(1).clamp(min=1e-9)
-    return sum_embeddings / sum_mask
-
-
-def embed_text(text: str) -> np.ndarray:
-    """
-    Generate embedding for input text using InLegalBERT.
-    
-    Args:
-        text: Input text to embed
-        
-    Returns:
-        Normalized embedding vector (768-dim)
-    """
-    if not tokenizer or not embed_model:
-        raise HTTPException(status_code=503, detail="Models not loaded. Please check installation.")
-    
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(device)
-    with torch.no_grad():
-        out = embed_model(**inputs, return_dict=True)
-        token_embeds = out.last_hidden_state
-        emb = mean_pooling(token_embeds, inputs["attention_mask"]).cpu().numpy()[0]
-    
-    # Normalize embedding
-    emb = emb / np.linalg.norm(emb).clip(min=1e-9)
-    return emb
-
-
-def load_or_create_faiss():
-    """
-    Load existing FAISS index or create a new one.
-    
-    Returns:
-        tuple: (index, metadata, index_file_path, meta_file_path)
-    """
-    dim = 768
-    index_file = os.path.join(DB_PATH, "precedent.index")
-    meta_file = os.path.join(DB_PATH, "meta.json")
-    
-    if os.path.exists(index_file) and os.path.exists(meta_file):
-        try:
-            index = faiss.read_index(index_file)
-            with open(meta_file, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-            print(f"✅ Loaded FAISS index with {len(meta)} precedents")
-        except Exception as e:
-            print(f"⚠️ Error loading index: {e}. Creating new index.")
-            index = faiss.IndexFlatL2(dim)
-            meta = []
-    else:
-        index = faiss.IndexFlatL2(dim)
-        meta = []
-        print("📝 Created new FAISS index")
-    
-    return index, meta, index_file, meta_file
+# Initialize models on startup
+initialize_models()
 
 
 def save_index(index, meta, index_file, meta_file):
@@ -132,6 +55,7 @@ def save_index(index, meta, index_file, meta_file):
 @app.get("/health")
 async def health():
     """Health check endpoint."""
+    from inlegalbert_helper import tokenizer, ner_model, embed_model, device
     return {
         "status": "healthy",
         "model_loaded": embed_model is not None,
@@ -163,10 +87,14 @@ async def embed_endpoint(data: dict):
     
     try:
         emb = embed_text(text)
+        if emb is None:
+            raise HTTPException(status_code=503, detail="Models not available. Cannot generate embedding.")
         return {
             "embedding": emb.tolist(),
             "dimension": len(emb)
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
 
@@ -201,51 +129,18 @@ async def analyze(req: AnalyzeRequest):
         raise HTTPException(status_code=400, detail="top_k_precedents must be between 1 and 100")
     
     try:
-        # Generate embedding
-        emb = embed_text(req.text)
+        # Use the helper function for complete analysis
+        result = analyze_with_inlegalbert(req.text, req.top_k_precedents)
         
-        # NER pass
-        ner_output = []
-        if ner_model:
-            try:
-                inputs = tokenizer(req.text, return_tensors="pt", truncation=True, max_length=512).to(device)
-                with torch.no_grad():
-                    logits = ner_model(**inputs).logits
-                preds = torch.argmax(logits, dim=-1).cpu().numpy()[0]
-                tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
-                ner_output = [{"token": t, "label_id": int(p)} for t, p in zip(tokens, preds)]
-            except Exception as e:
-                print(f"⚠️ NER failed: {e}")
-                ner_output = []
-        
-        # Load FAISS index and search
-        index, meta, index_file, meta_file = load_or_create_faiss()
-        precedents = []
-        
-        if len(meta) > 0:
-            try:
-                k = min(req.top_k_precedents, len(meta))
-                D, I = index.search(np.array([emb]).astype('float32'), k)
-                
-                for dist, idx in zip(D[0], I[0]):
-                    if idx < len(meta):
-                        precedents.append({
-                            "text": meta[idx]["text"][:150] + "..." if len(meta[idx]["text"]) > 150 else meta[idx]["text"],
-                            "distance": float(dist),
-                            "case_id": meta[idx].get("id", idx),
-                            "similarity_score": float(1 / (1 + dist))  # Convert distance to similarity
-                        })
-            except Exception as e:
-                print(f"⚠️ FAISS search failed: {e}")
-                precedents = []
-        else:
-            precedents = []
+        # Get total precedents in DB
+        _, meta, _, _ = load_or_create_faiss()
         
         return {
-            "ner": ner_output,
-            "embedding_dim": len(emb),
-            "precedents": precedents,
-            "total_precedents_in_db": len(meta)
+            "ner": result.get("ner", []),
+            "embedding_dim": result.get("embedding_dim", 0),
+            "precedents": result.get("precedents", []),
+            "total_precedents_in_db": len(meta) if meta else 0,
+            "inlegalbert_available": result.get("inlegalbert_available", False)
         }
     except HTTPException:
         raise
@@ -270,6 +165,8 @@ async def add_precedent(data: dict):
             "total": N
         }
     """
+    import numpy as np
+    
     text = data.get("text")
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")
@@ -279,9 +176,13 @@ async def add_precedent(data: dict):
     try:
         # Generate embedding
         emb = embed_text(text)
+        if emb is None:
+            raise HTTPException(status_code=503, detail="Models not available. Cannot generate embedding.")
         
         # Load index
         index, meta, index_file, meta_file = load_or_create_faiss()
+        if index is None:
+            raise HTTPException(status_code=500, detail="Failed to load FAISS index")
         
         # Add to index
         index.add(np.array([emb]).astype('float32'))
