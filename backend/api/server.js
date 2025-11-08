@@ -365,18 +365,12 @@ app.post('/api/agents/agent1/analyze', upload.array('files'), async (req, res) =
  */
 app.post('/api/agents/agent2/submit', async (req, res) => {
   try {
-    const response = await fetch(`${AGENT2_URL}/documents/submit`, {
-      method: 'POST',
+    const response = await axios.post(`${AGENT2_URL}/documents/submit`, req.body || {}, {
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(req.body || {})
+      timeout: 30000 // 30 second timeout
     });
     
-    if (!response.ok) {
-      throw new Error(`Agent 2 returned ${response.status}`);
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    res.json(response.data);
   } catch (error) {
     console.error('[Agent 2] Submit failed:', error.message);
     res.status(500).json({ 
@@ -394,18 +388,18 @@ app.post('/api/agents/agent2/submit', async (req, res) => {
  */
 app.get('/api/agents/agent2/documents/:caseId', async (req, res) => {
   try {
-    const response = await fetch(`${AGENT2_URL}/documents/${req.params.caseId}`);
+    const response = await axios.get(`${AGENT2_URL}/documents/${req.params.caseId}`, {
+      timeout: 30000 // 30 second timeout
+    });
     
-    if (!response.ok) {
-      return res.status(response.status).json({ 
+    res.json(response.data);
+  } catch (error) {
+    if (error.response && error.response.status === 404) {
+      return res.status(404).json({ 
         error: 'Document not found',
         caseId: req.params.caseId
       });
     }
-    
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
     console.error('[Agent 2] Get document failed:', error.message);
     res.status(500).json({ 
       error: 'Agent2 call failed', 
@@ -430,27 +424,24 @@ app.post('/api/agents/agent2/feedback', async (req, res) => {
       return res.status(400).json({ error: 'case_id is required' });
     }
     
-    const response = await fetch(`${AGENT2_URL}/documents/${req.body.case_id}/feedback`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(req.body)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Agent 2 returned ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const response = await axios.post(
+      `${AGENT2_URL}/documents/${req.body.case_id}/feedback`, 
+      req.body,
+      {
+        headers: { 'content-type': 'application/json' },
+        timeout: 30000 // 30 second timeout
+      }
+    );
     
     // Emit WebSocket update
     io.emit('workflow:update', {
       caseId: req.body.case_id,
       step: 'agent2',
       status: 'updated',
-      data: data
+      data: response.data
     });
     
-    res.json(data);
+    res.json(response.data);
   } catch (error) {
     console.error('[Agent 2] Feedback submission failed:', error.message);
     res.status(500).json({ 
@@ -522,20 +513,30 @@ app.post('/api/agents/agent3/synthesize', async (req, res) => {
     });
     
     // Call Agent 3 to synthesize verdict
-    const response = await fetch(`${AGENT3_URL}/synthesize`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(agent3Request)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Agent 3] Error response:', response.status, errorText);
-      throw new Error(`Agent 3 returned ${response.status}: ${errorText}`);
+    let verdictData;
+    try {
+      const response = await axios.post(
+        `${AGENT3_URL}/synthesize`, 
+        agent3Request,
+        {
+          headers: { 'content-type': 'application/json' },
+          timeout: 120000 // 2 minute timeout for verdict synthesis
+        }
+      );
+      
+      verdictData = response.data;
+      console.log('[Agent 3] Verdict synthesis completed');
+    } catch (axiosError) {
+      // Handle axios errors with better error messages
+      const errorMessage = axiosError.response 
+        ? `Agent 3 returned ${axiosError.response.status}: ${JSON.stringify(axiosError.response.data)}`
+        : axiosError.message || 'Unknown error';
+      
+      console.error('[Agent 3] Synthesis request failed:', errorMessage);
+      console.error('[Agent 3] Error details:', axiosError.code, axiosError.message);
+      
+      throw new Error(errorMessage);
     }
-    
-    const verdictData = await response.json();
-    console.log('[Agent 3] Verdict synthesis completed');
     
     // Prepare verdict data for encryption
     const verdictToEncrypt = {
@@ -674,8 +675,8 @@ app.delete('/api/data/clear-all', async (req, res) => {
     
     // Attempt to clear Agent 2 documents (if endpoint exists)
     try {
-      await fetch(`${AGENT2_URL}/documents/clear-all`, {
-        method: 'DELETE'
+      await axios.delete(`${AGENT2_URL}/documents/clear-all`, {
+        timeout: 5000
       }).catch(() => {
         console.log('[Clear Data] Agent 2 clear endpoint not available');
       });
@@ -725,13 +726,13 @@ app.get('/api/offline/status', async (req, res) => {
   
   // Check each agent's health endpoint
   const healthChecks = [
-    fetch(`${AGENT1_URL}/health`)
+    axios.get(`${AGENT1_URL}/health`, { timeout: 3000 })
       .then(() => { agentStatus.agent1 = true; })
       .catch(() => { agentStatus.agent1 = false; }),
-    fetch(`${AGENT2_URL}/health`)
+    axios.get(`${AGENT2_URL}/health`, { timeout: 3000 })
       .then(() => { agentStatus.agent2 = true; })
       .catch(() => { agentStatus.agent2 = false; }),
-    fetch(`${AGENT3_URL}/health`)
+    axios.get(`${AGENT3_URL}/health`, { timeout: 3000 })
       .then(() => { agentStatus.agent3 = true; })
       .catch(() => { agentStatus.agent3 = false; })
   ];
