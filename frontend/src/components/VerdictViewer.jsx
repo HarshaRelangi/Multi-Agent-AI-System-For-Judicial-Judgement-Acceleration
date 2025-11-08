@@ -1,12 +1,43 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './VerdictViewer.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 function VerdictViewer({ verdict, onBack }) {
+  const [decryptedVerdict, setDecryptedVerdict] = useState(null);
+  const [decrypting, setDecrypting] = useState(false);
+  
   // Debug logging
   console.log('VerdictViewer received verdict:', verdict);
   
+  // Decrypt verdict if encrypted
+  useEffect(() => {
+    if (verdict && verdict.encrypted && verdict.verdict_encrypted) {
+      setDecrypting(true);
+      fetch(`${API_URL}/api/verdict/decrypt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encrypted_data: verdict.verdict_encrypted })
+      })
+      .then(res => res.json())
+      .then(data => {
+        setDecryptedVerdict({ ...verdict, ...data.verdict });
+        setDecrypting(false);
+      })
+      .catch(err => {
+        console.error('Decryption error:', err);
+        setDecryptedVerdict(verdict); // Fallback to encrypted version
+        setDecrypting(false);
+      });
+    } else {
+      setDecryptedVerdict(verdict);
+    }
+  }, [verdict]);
+  
+  const displayVerdict = decryptedVerdict || verdict;
+  
   // Show error state if no data
-  if (!verdict || !verdict.prediction) {
+  if (!displayVerdict || (!displayVerdict.prediction && !decrypting)) {
     return (
       <div className="verdict-viewer">
         <div className="verdict-header glass-card">
@@ -18,25 +49,39 @@ function VerdictViewer({ verdict, onBack }) {
         </div>
         <div className="glass-card">
           <div className="error-message">
-            <h2>⏳ Waiting for verdict synthesis...</h2>
-            <p>Please go back and click "Approve & Synthesize Verdict" again.</p>
-            <p style={{fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginTop: '16px'}}>
-              Received data: {verdict ? JSON.stringify(Object.keys(verdict)) : 'null'}
-            </p>
+            {decrypting ? (
+              <>
+                <h2>🔒 Decrypting verdict...</h2>
+                <p>Securing your verdict data...</p>
+              </>
+            ) : (
+              <>
+                <h2>⏳ Waiting for verdict synthesis...</h2>
+                <p>Please go back and click "Approve & Synthesize Verdict" again.</p>
+                <p style={{fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginTop: '16px'}}>
+                  Received data: {verdict ? JSON.stringify(Object.keys(verdict)) : 'null'}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
     );
   }
   
-  const confidencePercentage = (verdict.confidence * 100).toFixed(1);
+  const confidencePercentage = (displayVerdict.confidence * 100).toFixed(1);
   
   return (
     <div className="verdict-viewer">
       <div className="verdict-header glass-card">
         <div>
-          <h1>⚖️ Verdict Synthesis Complete</h1>
-          <p className="case-id">Case ID: {verdict.case_id}</p>
+          <h1>⚖️ Verdict Synthesis Complete {displayVerdict.encrypted && '🔒'}</h1>
+          <p className="case-id">Case ID: {displayVerdict.case_id}</p>
+          {displayVerdict.encrypted && (
+            <p style={{fontSize: '12px', color: '#4ade80', marginTop: '4px'}}>
+              🔒 Verdict data is encrypted and secure
+            </p>
+          )}
         </div>
         <button onClick={onBack} className="back-button">← Back</button>
       </div>
@@ -44,8 +89,8 @@ function VerdictViewer({ verdict, onBack }) {
       <div className="verdict-main glass-card">
         <div className="prediction-section">
           <h2>🎯 Prediction</h2>
-          <div className={`prediction-badge ${verdict.prediction}`}>
-            {verdict.verdict_tendency || verdict.prediction}
+          <div className={`prediction-badge ${displayVerdict.prediction}`}>
+            {displayVerdict.verdict_tendency || displayVerdict.prediction}
           </div>
           <div className="confidence-meter">
             <div className="confidence-label">Confidence Score</div>
@@ -61,14 +106,14 @@ function VerdictViewer({ verdict, onBack }) {
 
         <div className="recommendation-section">
           <h3>💡 Recommended Action</h3>
-          <p>{verdict.recommended_action}</p>
+          <p>{displayVerdict.recommended_action}</p>
         </div>
       </div>
 
       <div className="glass-card reasoning-section">
         <h2>📋 Legal Reasoning</h2>
         <div className="reasoning-text">
-          {verdict.reasoning?.split('\n').map((line, index) => (
+          {displayVerdict.reasoning?.split('\n').map((line, index) => (
             <p key={index} className={line.trim().startsWith('#') ? 'section-header' : ''}>
               {line.trim().replace(/^#+\s*/, '').replace(/^\d+\.\s*/, '')}
             </p>
@@ -76,11 +121,11 @@ function VerdictViewer({ verdict, onBack }) {
         </div>
       </div>
 
-      {verdict.precedents && verdict.precedents.length > 0 && (
+      {displayVerdict.precedents && displayVerdict.precedents.length > 0 && (
         <div className="glass-card precedents-section">
           <h2>📚 Similar Legal Precedents</h2>
           <div className="precedents-list">
-            {verdict.precedents.map((precedent, index) => (
+            {displayVerdict.precedents.map((precedent, index) => (
               <div key={index} className="precedent-card">
                 <div className="precedent-header">
                   <h3>{precedent.case_name}</h3>
@@ -102,20 +147,20 @@ function VerdictViewer({ verdict, onBack }) {
         </div>
       )}
 
-      {verdict.risk_assessment && (
+      {displayVerdict.risk_assessment && (
         <div className="glass-card risk-assessment">
           <h2>⚠️ Risk Assessment</h2>
           <div className="risk-grid">
             <div className="risk-item">
               <div className="risk-label">Overall Risk</div>
-              <div className={`risk-value ${verdict.risk_assessment.overall_risk}`}>
-                {verdict.risk_assessment.overall_risk}
+              <div className={`risk-value ${displayVerdict.risk_assessment.overall_risk}`}>
+                {displayVerdict.risk_assessment.overall_risk}
               </div>
             </div>
             <div className="risk-item">
               <div className="risk-label">Confidence Level</div>
-              <div className={`risk-value ${verdict.risk_assessment.confidence_level}`}>
-                {verdict.risk_assessment.confidence_level}
+              <div className={`risk-value ${displayVerdict.risk_assessment.confidence_level}`}>
+                {displayVerdict.risk_assessment.confidence_level}
               </div>
             </div>
           </div>
@@ -124,7 +169,7 @@ function VerdictViewer({ verdict, onBack }) {
             <div className="sw-section">
               <h4>✅ Strengths</h4>
               <ul>
-                {verdict.risk_assessment.strengths?.map((strength, index) => (
+                {displayVerdict.risk_assessment.strengths?.map((strength, index) => (
                   <li key={index}>{strength}</li>
                 ))}
               </ul>
@@ -132,7 +177,7 @@ function VerdictViewer({ verdict, onBack }) {
             <div className="sw-section">
               <h4>⚠️ Weaknesses</h4>
               <ul>
-                {verdict.risk_assessment.weaknesses?.map((weakness, index) => (
+                {displayVerdict.risk_assessment.weaknesses?.map((weakness, index) => (
                   <li key={index}>{weakness}</li>
                 ))}
               </ul>
@@ -141,11 +186,11 @@ function VerdictViewer({ verdict, onBack }) {
         </div>
       )}
 
-      {verdict.alternatives && verdict.alternatives.length > 0 && (
+      {displayVerdict.alternatives && displayVerdict.alternatives.length > 0 && (
         <div className="glass-card alternatives-section">
           <h2>🔄 Alternative Outcomes</h2>
           <div className="alternatives-list">
-            {verdict.alternatives.map((alt, index) => (
+            {displayVerdict.alternatives.map((alt, index) => (
               <div key={index} className="alternative-card">
                 <h3>{alt.scenario}</h3>
                 <div className="alternative-probability">
