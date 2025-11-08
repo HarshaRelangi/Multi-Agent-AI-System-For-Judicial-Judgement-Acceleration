@@ -428,7 +428,7 @@ app.post('/api/agents/agent2/feedback', async (req, res) => {
       `${AGENT2_URL}/documents/${req.body.case_id}/feedback`, 
       req.body,
       {
-        headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
         timeout: 30000 // 30 second timeout
       }
     );
@@ -519,7 +519,7 @@ app.post('/api/agents/agent3/synthesize', async (req, res) => {
         `${AGENT3_URL}/synthesize`, 
         agent3Request,
         {
-          headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
           timeout: 120000 // 2 minute timeout for verdict synthesis
         }
       );
@@ -628,7 +628,7 @@ app.post('/api/verdict/decrypt', (req, res) => {
         error: 'No encrypted data provided',
         message: 'encrypted_data field is required'
       });
-    }
+  }
     
     const decrypted = decryptVerdict(encrypted_data);
     const verdict = JSON.parse(decrypted);
@@ -826,6 +826,16 @@ app.get('/api/workflows', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// ============================================================================
+// ANALYTICS ROUTES
+// ============================================================================
+
+/**
+ * Mount analytics router for performance tracking and validation metrics
+ */
+const analyticsRouter = require('./routes/analytics');
+app.use('/api/analytics', analyticsRouter);
 
 // ============================================================================
 // WEBSOCKET SETUP

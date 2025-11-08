@@ -30,6 +30,7 @@ import CaseUpload from './components/CaseUpload';
 import AgentDashboard from './components/AgentDashboard';
 import DocumentEditor from './components/DocumentEditor';
 import VerdictViewer from './components/VerdictViewer';
+import AnalysisTracker from './components/AnalysisTracker';
 
 // ============================================================================
 // CONFIGURATION
@@ -57,7 +58,7 @@ function App() {
   // WebSocket and workflow state
   const [socket, setSocket] = useState(null);
   const [workflowStatus, setWorkflowStatus] = useState(null);
-  
+
   // Offline mode state
   const [isOffline, setIsOffline] = useState(false);
   
@@ -139,7 +140,7 @@ function App() {
     });
     
     setSocket(newSocket);
-    
+
     // ========================================================================
     // WEBSOCKET EVENT HANDLERS
     // ========================================================================
@@ -198,7 +199,7 @@ function App() {
         setTimeout(() => setActiveTab('verdict'), 500);
       }
     });
-    
+
     /**
      * Handle WebSocket connection events
      */
@@ -431,6 +432,14 @@ function App() {
               🎯 Verdict
             </button>
             
+            <button 
+              className={activeTab === 'analysis' ? 'active' : ''} 
+              onClick={() => setActiveTab('analysis')}
+              title="View analytics and validation metrics"
+            >
+              📊 Analysis
+            </button>
+            
             {/* Clear All Data Button */}
             <button 
               className="clear-data-btn"
@@ -506,6 +515,13 @@ function App() {
           <VerdictViewer 
             verdict={currentCase.agent3Result}
             onBack={() => setActiveTab('review')}
+          />
+        )}
+        
+        {/* Analysis Tab */}
+        {activeTab === 'analysis' && (
+          <AnalysisTracker 
+            apiUrl={API_URL}
           />
         )}
       </main>

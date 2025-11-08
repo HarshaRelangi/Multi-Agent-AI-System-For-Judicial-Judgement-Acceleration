@@ -1,0 +1,5 @@
+{"filename": "test_case_01.txt", "entities": ["John Doe", "ABC Corporation", "New York", "Contract", "Breach of Contract"]}
+{"filename": "test_case_02.txt", "entities": ["Jane Smith", "XYZ Industries", "California", "Employment Dispute", "Wrongful Termination"]}
+{"filename": "sample_contract.txt", "entities": ["Parties", "Agreement", "Terms", "Payment", "Obligations"]}
+{"filename": "sample_email.txt", "entities": ["Sender", "Recipient", "Subject", "Date", "Content"]}
+

@@ -1,0 +1,12 @@
+{
+  "summary": {
+    "time_reduction_pct": 0,
+    "avg_processing_time_seconds": 0,
+    "extraction_accuracy_pct": 0,
+    "retrieval_speedup_x": 0,
+    "encryption_success_pct": 0,
+    "last_updated": "2025-01-08T00:00:00.000Z"
+  },
+  "cases": []
+}
+
