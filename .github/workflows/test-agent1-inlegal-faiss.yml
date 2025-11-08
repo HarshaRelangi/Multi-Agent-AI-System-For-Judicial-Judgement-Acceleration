@@ -52,15 +52,14 @@ jobs:
         run: |
           # Run tests with timeout - tests will skip if models aren't available
           # This is acceptable behavior - models download on first use in production
-          pytest tests/test_agent1_inlegal_faiss.py -v --tb=short --timeout=20 -x --ignore-glob="*test_analyze_with_precedents*" || true
-          echo "Tests completed (some may have been skipped if models unavailable)"
+          # Use -rs to show skipped tests, and allow exit code 5 (no tests collected) or 0 (all passed/skipped)
+          pytest tests/test_agent1_inlegal_faiss.py -v --tb=short --timeout=20 -rs -x || test $? -eq 5 || test $? -eq 0
+          echo "Tests completed (some may have been skipped if models unavailable - this is expected)"
         env:
           # Allow tests to run even if models fail to load
           TRANSFORMERS_OFFLINE: 0
           # Skip model downloads if they take too long
           TRANSFORMERS_CACHE: /tmp/transformers_cache
-          # Mark tests as allowed to skip
-          PYTEST_CURRENT_TEST: "true"
       
       - name: Test health endpoint (if server can start)
         working-directory: backend/agents
