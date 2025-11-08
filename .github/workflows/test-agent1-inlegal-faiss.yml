@@ -52,13 +52,10 @@ jobs:
         run: |
           # Run tests with timeout - tests will skip if models aren't available
           # This is acceptable behavior - models download on first use in production
-          # Use -rs to show skipped tests
-          set +e
-          pytest tests/test_agent1_inlegal_faiss.py -v --tb=short --timeout=20 -rs || EXIT_CODE=$?
-          echo "Tests completed (exit code: ${EXIT_CODE:-0})"
-          echo "Note: Skipped tests are expected if InLegalBERT models are unavailable in CI"
-          # Always exit with success - skipped tests are acceptable
-          exit 0
+          # Use -rs to show skipped tests, -v for verbose output
+          pytest tests/test_agent1_inlegal_faiss.py -v --tb=short --timeout=20 -rs
+          # pytest exits with 0 if all tests pass or are skipped
+          # Exit code 1 means tests failed (not skipped), which we want to catch
         env:
           # Allow tests to run even if models fail to load
           TRANSFORMERS_OFFLINE: 0
