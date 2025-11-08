@@ -15,7 +15,31 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
 import './AnalysisTracker.css';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 function AnalysisTracker({ apiUrl }) {
   // ========================================================================
@@ -194,74 +218,69 @@ function AnalysisTracker({ apiUrl }) {
   // ========================================================================
 
   /**
-   * Render simple line chart for processing time trend
+   * Render Chart.js line chart for processing time trend
    */
   const renderProcessingTimeChart = () => {
     if (cases.length === 0) return <div className="chart-empty">No data available</div>;
     
-    const recentCases = [...cases].slice(0, 10).reverse(); // Last 10 cases
-    const maxTime = Math.max(...recentCases.map(c => c.processing_time_seconds || 0), 1);
-    const chartHeight = 200;
-    const chartWidth = 600;
-    const padding = 40;
+    const recentCases = [...cases].slice(0, 20).reverse(); // Last 20 cases
+    const labels = recentCases.map((c, i) => `Case ${i + 1}`);
+    const data = recentCases.map(c => c.processing_time_seconds || 0);
     
-    const points = recentCases.map((c, i) => {
-      const x = padding + (i * (chartWidth - 2 * padding) / (recentCases.length - 1 || 1));
-      const y = padding + chartHeight - padding - ((c.processing_time_seconds || 0) / maxTime) * (chartHeight - 2 * padding);
-      return { x, y, time: c.processing_time_seconds || 0 };
-    });
+    const chartData = {
+      labels,
+      datasets: [{
+        label: 'Processing Time (seconds)',
+        data,
+        borderColor: '#60a5fa',
+        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#60a5fa',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      }]
+    };
     
-    const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: 'rgba(255, 255, 255, 0.7)'
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          titleColor: '#fff',
+          bodyColor: '#60a5fa',
+          borderColor: 'rgba(96, 165, 250, 0.3)',
+          borderWidth: 1
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        y: {
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+          beginAtZero: true
+        }
+      }
+    };
     
-    return (
-      <svg width={chartWidth} height={chartHeight + 60} className="chart-svg">
-        {/* Grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
-          <line
-            key={ratio}
-            x1={padding}
-            y1={padding + (chartHeight - 2 * padding) * (1 - ratio)}
-            x2={chartWidth - padding}
-            y2={padding + (chartHeight - 2 * padding) * (1 - ratio)}
-            stroke="rgba(255, 255, 255, 0.1)"
-            strokeWidth="1"
-          />
-        ))}
-        
-        {/* Line */}
-        <path
-          d={pathData}
-          fill="none"
-          stroke="#60a5fa"
-          strokeWidth="2"
-        />
-        
-        {/* Points */}
-        {points.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r="4"
-            fill="#60a5fa"
-            className="chart-point"
-            title={`${p.time.toFixed(1)}s`}
-          />
-        ))}
-        
-        {/* Labels */}
-        <text x={chartWidth / 2} y={chartHeight + 50} textAnchor="middle" fill="rgba(255, 255, 255, 0.6)" fontSize="12">
-          Recent Cases (Last 10)
-        </text>
-        <text x={20} y={chartHeight / 2 + 30} textAnchor="middle" fill="rgba(255, 255, 255, 0.6)" fontSize="12" transform={`rotate(-90, 20, ${chartHeight / 2 + 30})`}>
-          Processing Time (seconds)
-        </text>
-      </svg>
-    );
+    return <Line data={chartData} options={options} />;
   };
 
   /**
-   * Render bar chart for extraction metrics
+   * Render Chart.js bar chart for extraction metrics
    */
   const renderExtractionChart = () => {
     const casesWithMetrics = cases.filter(c => c.extraction_precision !== null && c.extraction_recall !== null);
@@ -271,65 +290,58 @@ function AnalysisTracker({ apiUrl }) {
     const avgRecall = casesWithMetrics.reduce((sum, c) => sum + c.extraction_recall, 0) / casesWithMetrics.length;
     const avgF1 = casesWithMetrics.reduce((sum, c) => sum + (c.extraction_f1 || 0), 0) / casesWithMetrics.length;
     
-    const chartHeight = 200;
-    const chartWidth = 300;
-    const barWidth = 60;
-    const spacing = 40;
+    const chartData = {
+      labels: ['Precision', 'Recall', 'F1 Score'],
+      datasets: [{
+        label: 'Extraction Metrics (%)',
+        data: [avgPrecision * 100, avgRecall * 100, avgF1 * 100],
+        backgroundColor: [
+          'rgba(96, 165, 250, 0.8)',
+          'rgba(167, 139, 250, 0.8)',
+          'rgba(52, 211, 153, 0.8)'
+        ],
+        borderColor: [
+          '#60a5fa',
+          '#a78bfa',
+          '#34d399'
+        ],
+        borderWidth: 2
+      }]
+    };
     
-    return (
-      <svg width={chartWidth} height={chartHeight + 60} className="chart-svg">
-        {/* Bars */}
-        <rect
-          x={spacing}
-          y={chartHeight - (avgPrecision * chartHeight)}
-          width={barWidth}
-          height={avgPrecision * chartHeight}
-          fill="#60a5fa"
-          className="chart-bar"
-        />
-        <text x={spacing + barWidth / 2} y={chartHeight + 20} textAnchor="middle" fill="rgba(255, 255, 255, 0.7)" fontSize="12">
-          Precision
-        </text>
-        <text x={spacing + barWidth / 2} y={chartHeight - (avgPrecision * chartHeight) - 5} textAnchor="middle" fill="#60a5fa" fontSize="11" fontWeight="600">
-          {(avgPrecision * 100).toFixed(1)}%
-        </text>
-        
-        <rect
-          x={spacing + barWidth + spacing}
-          y={chartHeight - (avgRecall * chartHeight)}
-          width={barWidth}
-          height={avgRecall * chartHeight}
-          fill="#a78bfa"
-          className="chart-bar"
-        />
-        <text x={spacing + barWidth + spacing + barWidth / 2} y={chartHeight + 20} textAnchor="middle" fill="rgba(255, 255, 255, 0.7)" fontSize="12">
-          Recall
-        </text>
-        <text x={spacing + barWidth + spacing + barWidth / 2} y={chartHeight - (avgRecall * chartHeight) - 5} textAnchor="middle" fill="#a78bfa" fontSize="11" fontWeight="600">
-          {(avgRecall * 100).toFixed(1)}%
-        </text>
-        
-        <rect
-          x={spacing + (barWidth + spacing) * 2}
-          y={chartHeight - (avgF1 * chartHeight)}
-          width={barWidth}
-          height={avgF1 * chartHeight}
-          fill="#34d399"
-          className="chart-bar"
-        />
-        <text x={spacing + (barWidth + spacing) * 2 + barWidth / 2} y={chartHeight + 20} textAnchor="middle" fill="rgba(255, 255, 255, 0.7)" fontSize="12">
-          F1 Score
-        </text>
-        <text x={spacing + (barWidth + spacing) * 2 + barWidth / 2} y={chartHeight - (avgF1 * chartHeight) - 5} textAnchor="middle" fill="#34d399" fontSize="11" fontWeight="600">
-          {(avgF1 * 100).toFixed(1)}%
-        </text>
-        
-        {/* Y-axis label */}
-        <text x={20} y={chartHeight / 2 + 30} textAnchor="middle" fill="rgba(255, 255, 255, 0.6)" fontSize="12" transform={`rotate(-90, 20, ${chartHeight / 2 + 30})`}>
-          Score (0-1)
-        </text>
-      </svg>
-    );
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          titleColor: '#fff',
+          bodyColor: '#60a5fa',
+          borderColor: 'rgba(96, 165, 250, 0.3)',
+          borderWidth: 1,
+          callbacks: {
+            label: (context) => `${context.parsed.y.toFixed(1)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        y: {
+          ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+          beginAtZero: true,
+          max: 100
+        }
+      }
+    };
+    
+    return <Bar data={chartData} options={options} />;
   };
 
   // ========================================================================

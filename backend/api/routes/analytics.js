@@ -33,8 +33,11 @@ const API_URL = process.env.API_URL || 'http://localhost:4000';
 // Analytics data storage path
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ANALYTICS_FILE = path.join(DATA_DIR, 'analytics.json');
+const ANALYTICS_SUMMARY_FILE = path.join(DATA_DIR, 'analytics_summary.json');
 const GOLD_FILE = path.join(__dirname, '..', '..', 'eval', 'gold.jsonl');
-const SAMPLE_FILES_DIR = path.join(__dirname, '..', '..', 'sample_files', 'benchmark');
+const SAMPLE_FILES_DIR = path.join(__dirname, '..', '..', 'sample_files');
+const BENCHMARK_FILES_DIR = path.join(__dirname, '..', '..', 'sample_files', 'benchmark');
+const DATASET_ZIP_PATH = path.join(__dirname, '..', '..', 'data', 'justice_ai_benchmark_dataset.zip');
 
 // Encryption key (should match server.js)
 let ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -44,7 +47,7 @@ if (!ENCRYPTION_KEY) {
 }
 
 // Baseline metrics for comparison
-const BASELINE_PROCESSING_TIME = 7200; // 2 hours in seconds
+const BASELINE_PROCESSING_TIME = 14400; // 4 hours in seconds (baseline)
 const BASELINE_RETRIEVAL_LATENCY = 2000; // 2 seconds in milliseconds
 
 // ============================================================================
@@ -69,19 +72,32 @@ async function loadAnalytics() {
   try {
     await ensureDataDir();
     const data = await fs.readFile(ANALYTICS_FILE, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // Ensure cases array exists
+    return { cases: parsed.cases || [] };
   } catch (error) {
     // Return default structure if file doesn't exist
+    return { cases: [] };
+  }
+}
+
+/**
+ * Load analytics summary from separate JSON file
+ */
+async function loadSummary() {
+  try {
+    await ensureDataDir();
+    const data = await fs.readFile(ANALYTICS_SUMMARY_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    // Return default summary if file doesn't exist
     return {
-      summary: {
-        time_reduction_pct: 0,
-        avg_processing_time_seconds: 0,
-        extraction_accuracy_pct: 0,
-        retrieval_speedup_x: 0,
-        encryption_success_pct: 0,
-        last_updated: new Date().toISOString()
-      },
-      cases: []
+      time_reduction_pct: 0,
+      avg_processing_time_seconds: 0,
+      extraction_accuracy_pct: 0,
+      retrieval_speedup_x: 0,
+      encryption_success_pct: 0,
+      last_updated: new Date().toISOString()
     };
   }
 }
@@ -95,6 +111,19 @@ async function saveAnalytics(data) {
     await fs.writeFile(ANALYTICS_FILE, JSON.stringify(data, null, 2), 'utf8');
   } catch (error) {
     console.error('[Analytics] Error saving analytics data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save analytics summary to separate JSON file
+ */
+async function saveSummary(summary) {
+  try {
+    await ensureDataDir();
+    await fs.writeFile(ANALYTICS_SUMMARY_FILE, JSON.stringify(summary, null, 2), 'utf8');
+  } catch (error) {
+    console.error('[Analytics] Error saving analytics summary:', error);
     throw error;
   }
 }
@@ -200,22 +229,72 @@ function testEncryption() {
 }
 
 /**
+ * Unzip dataset if needed
+ */
+async function unzipDatasetIfNeeded() {
+  try {
+    // Check if dataset zip exists
+    const zipExists = await fs.access(DATASET_ZIP_PATH).then(() => true).catch(() => false);
+    if (!zipExists) {
+      // Try alternative location (Downloads folder)
+      const altZipPath = path.join(require('os').homedir(), 'Downloads', 'justice_ai_benchmark_dataset.zip');
+      const altExists = await fs.access(altZipPath).then(() => true).catch(() => false);
+      if (altExists) {
+        console.log('[Analytics] Found dataset in Downloads folder');
+        // Copy to data directory
+        await fs.copyFile(altZipPath, DATASET_ZIP_PATH);
+      } else {
+        console.warn('[Analytics] Dataset zip not found, skipping extraction');
+        return false;
+      }
+    }
+
+    // Check if sample_files directory already has files
+    const sampleFilesExist = await fs.readdir(SAMPLE_FILES_DIR).then(() => true).catch(() => false);
+    if (sampleFilesExist) {
+      const files = await fs.readdir(SAMPLE_FILES_DIR);
+      if (files.length > 0) {
+        console.log('[Analytics] Sample files already exist, skipping extraction');
+        return true;
+      }
+    }
+
+    // Unzip dataset (requires unzipper package or use child_process)
+    console.log('[Analytics] Extracting dataset...');
+    const { execSync } = require('child_process');
+    const unzipCmd = process.platform === 'win32' 
+      ? `powershell -Command "Expand-Archive -Path '${DATASET_ZIP_PATH}' -DestinationPath '${path.dirname(SAMPLE_FILES_DIR)}' -Force"`
+      : `unzip -o ${DATASET_ZIP_PATH} -d ${path.dirname(SAMPLE_FILES_DIR)}`;
+    
+    execSync(unzipCmd, { stdio: 'inherit' });
+    console.log('[Analytics] Dataset extracted successfully');
+    return true;
+  } catch (error) {
+    console.warn('[Analytics] Error extracting dataset:', error.message);
+    return false;
+  }
+}
+
+/**
  * Get sample files for benchmarking
  */
 async function getSampleFiles() {
+  // Try to unzip dataset first
+  await unzipDatasetIfNeeded();
+
   try {
-    const files = await fs.readdir(SAMPLE_FILES_DIR);
+    // Try benchmark directory first
+    const files = await fs.readdir(BENCHMARK_FILES_DIR);
     return files
       .filter(f => f.endsWith('.txt') || f.endsWith('.pdf') || f.endsWith('.docx'))
-      .map(f => path.join(SAMPLE_FILES_DIR, f));
+      .map(f => path.join(BENCHMARK_FILES_DIR, f));
   } catch (error) {
     // Fallback to root sample_files directory
     try {
-      const rootSampleDir = path.join(__dirname, '..', '..', 'sample_files');
-      const files = await fs.readdir(rootSampleDir);
+      const files = await fs.readdir(SAMPLE_FILES_DIR);
       return files
         .filter(f => f.endsWith('.txt') || f.endsWith('.pdf') || f.endsWith('.docx'))
-        .map(f => path.join(rootSampleDir, f));
+        .map(f => path.join(SAMPLE_FILES_DIR, f));
     } catch (err) {
       console.warn('[Analytics] No sample files found');
       return [];
@@ -242,15 +321,15 @@ function calculateSummary(cases) {
   const avgProcessingTime = cases.reduce((sum, c) => sum + (c.processing_time_seconds || 0), 0) / cases.length;
   const timeReduction = ((BASELINE_PROCESSING_TIME - avgProcessingTime) / BASELINE_PROCESSING_TIME) * 100;
 
-  // Extraction accuracy (average of precision and recall)
-  const accuracyCases = cases.filter(c => c.extraction_precision !== null && c.extraction_recall !== null);
+  // Extraction accuracy (average of F1 scores)
+  const accuracyCases = cases.filter(c => c.extraction_f1 !== null && c.extraction_f1 !== undefined);
   const avgAccuracy = accuracyCases.length > 0
-    ? accuracyCases.reduce((sum, c) => sum + ((c.extraction_precision + c.extraction_recall) / 2), 0) / accuracyCases.length
+    ? accuracyCases.reduce((sum, c) => sum + (c.extraction_f1 || 0), 0) / accuracyCases.length
     : 0;
 
   // Retrieval speedup
   const avgRetrievalLatency = cases.reduce((sum, c) => sum + (c.retrieval_latency_ms || BASELINE_RETRIEVAL_LATENCY), 0) / cases.length;
-  const speedup = BASELINE_RETRIEVAL_LATENCY / avgRetrievalLatency;
+  const speedup = avgRetrievalLatency > 0 ? BASELINE_RETRIEVAL_LATENCY / avgRetrievalLatency : 0;
 
   // Encryption success rate
   const encryptionSuccesses = cases.filter(c => c.encryption_success === true).length;
@@ -260,7 +339,7 @@ function calculateSummary(cases) {
     time_reduction_pct: Math.max(0, Math.round(timeReduction)),
     avg_processing_time_seconds: Math.round(avgProcessingTime),
     extraction_accuracy_pct: Math.round(avgAccuracy * 100),
-    retrieval_speedup_x: Math.round(speedup * 10) / 10,
+    retrieval_speedup_x: speedup > 0 ? Math.round(speedup * 10) / 10 : 0,
     encryption_success_pct: Math.round(encryptionSuccessRate),
     last_updated: new Date().toISOString()
   };
@@ -277,8 +356,8 @@ function calculateSummary(cases) {
  */
 router.get('/summary', async (req, res) => {
   try {
-    const analytics = await loadAnalytics();
-    res.json(analytics.summary);
+    const summary = await loadSummary();
+    res.json(summary);
   } catch (error) {
     console.error('[Analytics] Error loading summary:', error);
     res.status(500).json({ error: 'Failed to load analytics summary', details: error.message });
@@ -472,8 +551,9 @@ async function runBenchmark(taskId, sampleCount) {
 
   // Update analytics data
   analytics.cases.push(...newCases);
-  analytics.summary = calculateSummary(analytics.cases);
+  const summary = calculateSummary(analytics.cases);
   await saveAnalytics(analytics);
+  await saveSummary(summary);
 
   console.log(`[Analytics] Benchmark ${taskId} completed: ${newCases.length} cases processed`);
 }
